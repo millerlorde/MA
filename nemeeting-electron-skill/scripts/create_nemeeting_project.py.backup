@@ -1,0 +1,1283 @@
+#!/usr/bin/env python3
+"""
+网易会议 Electron 项目生成器
+用法: python create_nemeeting_project.py <project_name> [output_dir]
+"""
+
+import os
+import sys
+import shutil
+import subprocess
+import json
+
+def create_project_structure(project_name, output_dir="."):
+    """创建完整的 Electron 项目结构"""
+
+    # 项目根目录
+    project_root = os.path.join(output_dir, project_name)
+
+    # 创建目录结构
+    directories = [
+        project_root,
+        os.path.join(project_root, "src"),
+        os.path.join(project_root, "src", "main"),
+        os.path.join(project_root, "src", "preload"),
+        os.path.join(project_root, "src", "renderer"),
+        os.path.join(project_root, "resources"),
+        os.path.join(project_root, "build"),
+    ]
+
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+        print(f"📁 创建目录: {directory}")
+
+    return project_root
+
+def create_package_json(project_root, project_name):
+    """创建 package.json 文件"""
+
+    package_json = {
+        "name": project_name.lower().replace(" ", "-"),
+        "version": "1.0.0",
+        "description": "网易会议 Electron 客户端",
+        "main": "src/main/main.js",
+        "scripts": {
+            "start": "electron .",
+            "build": "electron-builder",
+            "pack": "electron-builder --dir",
+            "pack:mac": "electron-builder --mac",
+            "pack:win": "electron-builder --win",
+            "pack:linux": "electron-builder --linux"
+        },
+        "keywords": ["netease", "meeting", "electron", "nemeeting"],
+        "author": "Your Name",
+        "license": "MIT",
+        "dependencies": {
+            "electron-store": "^8.1.0",
+            "nemeeting-electron-sdk": "^3.0.0"
+        },
+        "devDependencies": {
+            "electron": "^25.0.0",
+            "electron-builder": "^24.0.0"
+        },
+        "build": {
+            "appId": f"com.example.{project_name.lower()}",
+            "productName": project_name,
+            "directories": {
+                "output": "dist"
+            },
+            "files": [
+                "src/**/*",
+                "resources/**/*",
+                "package.json",
+                "README.md"
+            ],
+            "mac": {
+                "category": "public.app-category.business"
+            },
+            "win": {
+                "target": "nsis"
+            },
+            "linux": {
+                "target": "AppImage"
+            }
+        }
+    }
+
+    package_json_path = os.path.join(project_root, "package.json")
+    with open(package_json_path, "w", encoding="utf-8") as f:
+        json.dump(package_json, f, indent=2, ensure_ascii=False)
+
+    print(f"📦 创建 package.json: {package_json_path}")
+    return package_json_path
+
+def create_main_js(project_root):
+    """创建主进程文件"""
+
+    main_js_content = """const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path = require('path');
+const Store = require('electron-store');
+
+// 初始化配置存储
+const store = new Store();
+
+// 创建主窗口
+function createWindow() {
+  const mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    icon: path.join(__dirname, '../../resources/icon.png')
+  });
+
+  // 加载应用界面
+  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+
+  // 开发工具（开发模式）
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools();
+  }
+
+  return mainWindow;
+}
+
+// 应用准备就绪
+app.whenReady().then(() => {
+  const mainWindow = createWindow();
+
+  // macOS 应用激活
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+// 所有窗口关闭时退出应用（macOS 除外）
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+// IPC 处理器
+ipcMain.handle('get-config', () => {
+  return {
+    appKey: store.get('appKey', ''),
+    rememberMe: store.get('rememberMe', true)
+  };
+});
+
+ipcMain.handle('save-config', (event, config) => {
+  store.set('appKey', config.appKey);
+  store.set('rememberMe', config.rememberMe);
+  return { success: true };
+});
+
+ipcMain.handle('clear-config', () => {
+  store.clear();
+  return { success: true };
+});
+
+ipcMain.handle('show-error-dialog', (event, title, message) => {
+  dialog.showErrorBox(title, message);
+});
+
+ipcMain.handle('show-info-dialog', (event, title, message) => {
+  dialog.showMessageBox({
+    type: 'info',
+    title: title,
+    message: message
+  });
+});"""
+
+    main_js_path = os.path.join(project_root, "src", "main", "main.js")
+    with open(main_js_path, "w", encoding="utf-8") as f:
+        f.write(main_js_content)
+
+    print(f"⚡ 创建主进程文件: {main_js_path}")
+    return main_js_path
+
+def create_preload_js(project_root):
+    """创建预加载脚本"""
+
+    preload_js_content = """const { contextBridge, ipcRenderer } = require('electron');
+
+// 安全地暴露 API 给渲染进程
+contextBridge.exposeInMainWorld('electronAPI', {
+  // 配置管理
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  saveConfig: (config) => ipcRenderer.invoke('save-config', config),
+  clearConfig: () => ipcRenderer.invoke('clear-config'),
+
+  // 对话框
+  showErrorDialog: (title, message) => ipcRenderer.invoke('show-error-dialog', title, message),
+  showInfoDialog: (title, message) => ipcRenderer.invoke('show-info-dialog', title, message),
+
+  // 窗口控制
+  minimizeWindow: () => ipcRenderer.send('window:minimize'),
+  maximizeWindow: () => ipcRenderer.send('window:maximize'),
+  closeWindow: () => ipcRenderer.send('window:close')
+});"""
+
+    preload_js_path = os.path.join(project_root, "src", "preload", "preload.js")
+    with open(preload_js_path, "w", encoding="utf-8") as f:
+        f.write(preload_js_content)
+
+    print(f"🔗 创建预加载脚本: {preload_js_path}")
+    return preload_js_path
+
+def create_renderer_js(project_root):
+    """创建渲染进程脚本"""
+
+    renderer_js_content = """// NEMeetingKit SDK 初始化状态
+let neMeetingKit = null;
+let accountService = null;
+let meetingService = null;
+
+// 应用状态
+const appState = {
+  initialized: false,
+  loggedIn: false,
+  userInfo: null,
+  loading: false
+};
+
+// DOM 元素
+const elements = {
+  configPanel: document.getElementById('config-panel'),
+  loginPanel: document.getElementById('login-panel'),
+  mainPanel: document.getElementById('main-panel'),
+
+  appKeyInput: document.getElementById('appKey'),
+  rememberMeCheckbox: document.getElementById('rememberMe'),
+  saveConfigBtn: document.getElementById('save-config'),
+  clearConfigBtn: document.getElementById('clear-config'),
+
+  userUuidInput: document.getElementById('userUuid'),
+  tokenInput: document.getElementById('token'),
+  loginBtn: document.getElementById('login'),
+  logoutBtn: document.getElementById('logout'),
+
+  createMeetingBtn: document.getElementById('create-meeting'),
+  joinMeetingBtn: document.getElementById('join-meeting'),
+  scheduleMeetingBtn: document.getElementById('schedule-meeting'),
+
+  statusText: document.getElementById('status-text'),
+  loadingIndicator: document.getElementById('loading')
+};
+
+// 初始化应用
+async function initApp() {
+  try {
+    // 加载保存的配置
+    const config = await window.electronAPI.getConfig();
+
+    if (config.appKey && config.rememberMe) {
+      elements.appKeyInput.value = config.appKey;
+      elements.rememberMeCheckbox.checked = config.rememberMe;
+
+      // 自动尝试初始化 SDK
+      await initSDK(config.appKey);
+    }
+
+    updateUI();
+  } catch (error) {
+    console.error('初始化失败:', error);
+    showError('初始化失败', error.message);
+  }
+}
+
+// 初始化 NEMeetingKit SDK
+async function initSDK(appKey) {
+  if (!appKey) {
+    throw new Error('请先输入 AppKey');
+  }
+
+  showLoading('正在初始化 SDK...');
+
+  try {
+    // 动态导入 SDK（确保已安装）
+    const NEMeetingKit = (await import('nemeeting-electron-sdk')).default;
+
+    // 获取实例
+    neMeetingKit = NEMeetingKit.getInstance();
+
+    // 配置参数
+    const config = {
+      appKey: appKey,
+      debug: true // 开发模式开启调试
+    };
+
+    // 初始化
+    await neMeetingKit.initialize(config);
+
+    // 获取服务
+    accountService = neMeetingKit.getAccountService();
+    meetingService = neMeetingKit.getMeetingService();
+
+    appState.initialized = true;
+    showSuccess('SDK 初始化成功');
+
+    // 切换到登录界面
+    elements.configPanel.style.display = 'none';
+    elements.loginPanel.style.display = 'block';
+
+  } catch (error) {
+    console.error('SDK 初始化失败:', error);
+    throw new Error(`SDK 初始化失败: ${error.message || '未知错误'}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+// 用户登录
+async function login() {
+  const userUuid = elements.userUuidInput.value.trim();
+  const token = elements.tokenInput.value.trim();
+
+  if (!userUuid || !token) {
+    showError('登录失败', '请输入 User UUID 和 Token');
+    return;
+  }
+
+  showLoading('正在登录...');
+
+  try {
+    await accountService.loginByToken(userUuid, token);
+
+    appState.loggedIn = true;
+    appState.userInfo = { userUuid };
+
+    showSuccess('登录成功');
+    updateUI();
+
+  } catch (error) {
+    console.error('登录失败:', error);
+    showError('登录失败', error.message || '未知错误');
+  } finally {
+    hideLoading();
+  }
+}
+
+// 用户登出
+async function logout() {
+  showLoading('正在退出登录...');
+
+  try {
+    await accountService.logout();
+
+    appState.loggedIn = false;
+    appState.userInfo = null;
+
+    showInfo('已退出登录');
+    updateUI();
+
+  } catch (error) {
+    console.error('退出登录失败:', error);
+    showError('退出登录失败', error.message || '未知错误');
+  } finally {
+    hideLoading();
+  }
+}
+
+// 创建即刻会议
+async function createMeeting() {
+  if (!appState.loggedIn) {
+    showError('操作失败', '请先登录');
+    return;
+  }
+
+  showLoading('正在创建会议...');
+
+  try {
+    const meetingOptions = {
+      subject: '快速会议',
+      duration: 60, // 60分钟
+      enableChat: true,
+      enableVideo: true,
+      enableAudio: true
+    };
+
+    const meetingInfo = await meetingService.createMeeting(meetingOptions);
+
+    showInfo('会议创建成功', `会议号: ${meetingInfo.meetingId}`);
+
+    // 这里可以自动加入会议
+    // await joinMeeting(meetingInfo.meetingId);
+
+  } catch (error) {
+    console.error('创建会议失败:', error);
+    showError('创建会议失败', error.message || '未知错误');
+  } finally {
+    hideLoading();
+  }
+}
+
+// 加入会议
+async function joinMeeting(meetingId) {
+  if (!meetingId) {
+    meetingId = prompt('请输入会议号:');
+    if (!meetingId) return;
+  }
+
+  showLoading('正在加入会议...');
+
+  try {
+    const joinOptions = {
+      meetingId: meetingId,
+      displayName: appState.userInfo?.userUuid || '用户',
+      enableVideo: true,
+      enableAudio: true
+    };
+
+    await meetingService.joinMeeting(joinOptions);
+
+    showSuccess('已加入会议');
+
+  } catch (error) {
+    console.error('加入会议失败:', error);
+    showError('加入会议失败', error.message || '未知错误');
+  } finally {
+    hideLoading();
+  }
+}
+
+// 预约会议
+async function scheduleMeeting() {
+  if (!appState.loggedIn) {
+    showError('操作失败', '请先登录');
+    return;
+  }
+
+  // 显示预约表单（简化版）
+  const subject = prompt('请输入会议主题:', '预约会议');
+  if (!subject) return;
+
+  const startTime = prompt('请输入开始时间 (YYYY-MM-DD HH:mm):',
+    new Date(Date.now() + 3600000).toISOString().slice(0, 16).replace('T', ' '));
+
+  showLoading('正在预约会议...');
+
+  try {
+    const scheduleOptions = {
+      subject: subject,
+      startTime: new Date(startTime).getTime(),
+      duration: 60,
+      enableChat: true,
+      enableVideo: true,
+      enableAudio: true
+    };
+
+    const meetingInfo = await meetingService.scheduleMeeting(scheduleOptions);
+
+    showInfo('会议预约成功', `会议号: ${meetingInfo.meetingId}\\n开始时间: ${new Date(meetingInfo.startTime).toLocaleString()}`);
+
+  } catch (error) {
+    console.error('预约会议失败:', error);
+    showError('预约会议失败', error.message || '未知错误');
+  } finally {
+    hideLoading();
+  }
+}
+
+// 保存配置
+async function saveConfig() {
+  const appKey = elements.appKeyInput.value.trim();
+  const rememberMe = elements.rememberMeCheckbox.checked;
+
+  if (!appKey) {
+    showError('保存失败', '请输入 AppKey');
+    return;
+  }
+
+  try {
+    await window.electronAPI.saveConfig({
+      appKey: appKey,
+      rememberMe: rememberMe
+    });
+
+    showSuccess('配置已保存');
+
+    // 尝试初始化 SDK
+    await initSDK(appKey);
+
+  } catch (error) {
+    console.error('保存配置失败:', error);
+    showError('保存配置失败', error.message || '未知错误');
+  }
+}
+
+// 清除配置
+async function clearConfig() {
+  try {
+    await window.electronAPI.clearConfig();
+
+    elements.appKeyInput.value = '';
+    elements.rememberMeCheckbox.checked = true;
+
+    appState.initialized = false;
+    appState.loggedIn = false;
+    appState.userInfo = null;
+
+    showInfo('配置已清除');
+    updateUI();
+
+  } catch (error) {
+    console.error('清除配置失败:', error);
+    showError('清除配置失败', error.message || '未知错误');
+  }
+}
+
+// 更新 UI 状态
+function updateUI() {
+  // 显示/隐藏面板
+  if (!appState.initialized) {
+    elements.configPanel.style.display = 'block';
+    elements.loginPanel.style.display = 'none';
+    elements.mainPanel.style.display = 'none';
+  } else if (!appState.loggedIn) {
+    elements.configPanel.style.display = 'none';
+    elements.loginPanel.style.display = 'block';
+    elements.mainPanel.style.display = 'none';
+  } else {
+    elements.configPanel.style.display = 'none';
+    elements.loginPanel.style.display = 'none';
+    elements.mainPanel.style.display = 'block';
+  }
+
+  // 更新状态文本
+  let status = '';
+  if (appState.initialized) {
+    status += '✓ SDK 已初始化 ';
+  }
+  if (appState.loggedIn) {
+    status += `✓ 已登录 (${appState.userInfo?.userUuid || '未知用户'})`;
+  }
+
+  elements.statusText.textContent = status || '未初始化';
+
+  // 更新按钮状态
+  elements.loginBtn.disabled = !appState.initialized;
+  elements.createMeetingBtn.disabled = !appState.loggedIn;
+  elements.joinMeetingBtn.disabled = !appState.loggedIn;
+  elements.scheduleMeetingBtn.disabled = !appState.loggedIn;
+  elements.logoutBtn.disabled = !appState.loggedIn;
+}
+
+// 显示/隐藏加载指示器
+function showLoading(message) {
+  appState.loading = true;
+  elements.loadingIndicator.textContent = message;
+  elements.loadingIndicator.style.display = 'block';
+
+  // 禁用所有按钮
+  document.querySelectorAll('button').forEach(btn => {
+    btn.disabled = true;
+  });
+}
+
+function hideLoading() {
+  appState.loading = false;
+  elements.loadingIndicator.style.display = 'none';
+  updateUI();
+}
+
+// 显示消息
+function showSuccess(message) {
+  window.electronAPI.showInfoDialog('成功', message);
+}
+
+function showInfo(title, message) {
+  window.electronAPI.showInfoDialog(title, message);
+}
+
+function showError(title, message) {
+  window.electronAPI.showErrorDialog(title, message);
+}
+
+// 事件监听器
+function setupEventListeners() {
+  // 配置面板
+  elements.saveConfigBtn.addEventListener('click', saveConfig);
+  elements.clearConfigBtn.addEventListener('click', clearConfig);
+
+  // 登录面板
+  elements.loginBtn.addEventListener('click', login);
+
+  // 主面板
+  elements.createMeetingBtn.addEventListener('click', createMeeting);
+  elements.joinMeetingBtn.addEventListener('click', () => joinMeeting());
+  elements.scheduleMeetingBtn.addEventListener('click', scheduleMeeting);
+  elements.logoutBtn.addEventListener('click', logout);
+
+  // 输入框回车键支持
+  elements.appKeyInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') saveConfig();
+  });
+
+  elements.userUuidInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && elements.tokenInput.value) {
+      elements.tokenInput.focus();
+    }
+  });
+
+  elements.tokenInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') login();
+  });
+}
+
+// 页面加载完成
+document.addEventListener('DOMContentLoaded', () => {
+  setupEventListeners();
+  initApp();
+});"""
+
+    renderer_js_path = os.path.join(project_root, "src", "renderer", "renderer.js")
+    with open(renderer_js_path, "w", encoding="utf-8") as f:
+        f.write(renderer_js_content)
+
+    print(f"🎨 创建渲染进程文件: {renderer_js_path}")
+    return renderer_js_path
+
+def create_index_html(project_root):
+    """创建 HTML 主界面"""
+
+    html_content = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网易会议 Electron 客户端</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .app-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 500px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .checkbox-group input {
+            margin-right: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.2);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #e5e7eb;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+        }
+
+        .meeting-buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .status-bar {
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            padding: 15px 30px;
+            text-align: center;
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #4f46e5;
+            font-size: 14px;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-left: 10px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>网易会议 Electron 客户端</h1>
+            <p>快速接入 NEMeetingKit SDK</p>
+        </div>
+
+        <div class="content">
+            <!-- 配置面板 -->
+            <div id="config-panel" class="panel">
+                <div class="form-group">
+                    <label for="appKey">App Key</label>
+                    <input type="text" id="appKey" placeholder="请输入网易会议 App Key">
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="rememberMe" checked>
+                    <label for="rememberMe">记住配置</label>
+                </div>
+
+                <div class="button-group">
+                    <button id="save-config" class="btn-primary">保存并初始化</button>
+                    <button id="clear-config" class="btn-secondary">清除配置</button>
+                </div>
+            </div>
+
+            <!-- 登录面板 -->
+            <div id="login-panel" class="panel" style="display: none;">
+                <div class="form-group">
+                    <label for="userUuid">User UUID</label>
+                    <input type="text" id="userUuid" placeholder="请输入用户 UUID">
+                </div>
+
+                <div class="form-group">
+                    <label for="token">Token</label>
+                    <input type="password" id="token" placeholder="请输入访问令牌">
+                </div>
+
+                <div class="button-group">
+                    <button id="login" class="btn-primary" disabled>登录</button>
+                </div>
+            </div>
+
+            <!-- 主功能面板 -->
+            <div id="main-panel" class="panel" style="display: none;">
+                <div class="meeting-buttons">
+                    <button id="create-meeting" class="btn-success" disabled>创建即刻会议</button>
+                    <button id="join-meeting" class="btn-primary" disabled>加入会议</button>
+                    <button id="schedule-meeting" class="btn-secondary" disabled>预约会议</button>
+                    <button id="logout" class="btn-danger" disabled>退出登录</button>
+                </div>
+            </div>
+
+            <!-- 加载指示器 -->
+            <div id="loading" class="loading"></div>
+        </div>
+
+        <div class="status-bar">
+            <span id="status-text">未初始化</span>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>"""
+
+    index_html_path = os.path.join(project_root, "src", "renderer", "index.html")
+    with open(index_html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"🌐 创建主界面: {index_html_path}")
+    return index_html_path
+
+def create_styles_css(project_root):
+    """创建样式文件（备用）"""
+
+    css_content = """/* 主样式文件 - 已内联到 index.html */
+/* 此文件作为备用样式扩展 */"""
+
+    css_path = os.path.join(project_root, "src", "renderer", "styles.css")
+    with open(css_path, "w", encoding="utf-8") as f:
+        f.write(css_content)
+
+    print(f"🎨 创建样式文件: {css_path}")
+    return css_path
+
+def create_gitignore(project_root):
+    """创建 .gitignore 文件"""
+
+    gitignore_content = """# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Directory for instrumented libs generated by jscoverage/JSCover
+lib-cov
+
+# Coverage directory used by tools like istanbul
+coverage
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
+.grunt
+
+# Bower dependency directory (https://bower.io/)
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons (https://nodejs.org/api/addons.html)
+build/Release
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript v1 declaration files
+typings/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.test
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+# Comment in the public folder in case you want to use a static site in the dist folder
+#public
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Electron
+dist/
+out/
+release/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db"""
+
+    gitignore_path = os.path.join(project_root, ".gitignore")
+    with open(gitignore_path, "w", encoding="utf-8") as f:
+        f.write(gitignore_content)
+
+    print(f"📝 创建 .gitignore: {gitignore_path}")
+    return gitignore_path
+
+def create_readme(project_root, project_name):
+    """创建 README.md 文件"""
+
+    readme_content = f"""# {project_name}
+
+基于 Electron 的网易会议客户端，集成 NEMeetingKit SDK。
+
+## 功能特性
+
+- 🚀 **一键初始化**：自动配置 NEMeetingKit SDK
+- 🔐 **安全登录**：支持 Token 登录方式
+- 💾 **配置持久化**：自动保存 AppKey 和用户偏好
+- 🎯 **完整会议功能**：创建会议、加入会议、预约会议
+- 🎨 **现代化界面**：响应式设计，美观易用
+- 🛠 **开发者友好**：完整的错误处理和调试信息
+
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+cd {project_name}
+npm install
+```
+
+### 2. 启动应用
+
+```bash
+npm start
+```
+
+### 3. 配置 AppKey
+
+1. 在应用界面输入你的网易会议 AppKey
+2. 点击"保存并初始化"
+3. SDK 初始化成功后进入登录界面
+
+### 4. 用户登录
+
+1. 输入 User UUID 和 Token
+2. 点击"登录"
+3. 登录成功后进入主功能界面
+
+## 获取凭证
+
+### AppKey
+联系网易会议商务获取 AppKey。
+
+### User UUID 和 Token
+通过网易会议服务端 API 获取用户登录凭证。
+
+## 项目结构
+
+```
+{project_name}/
+├── src/
+│   ├── main/
+│   │   └── main.js          # Electron 主进程
+│   ├── preload/
+│   │   └── preload.js       # 预加载脚本（安全 IPC）
+│   └── renderer/
+│       ├── index.html       # 主界面
+│       ├── renderer.js      # 前端逻辑
+│       └── styles.css       # 样式文件
+├── resources/               # 应用图标等静态资源
+├── build/                   # 构建配置
+├── package.json            # 项目配置
+├── README.md               # 说明文档
+└── .gitignore              # Git 忽略文件
+```
+
+## 开发指南
+
+### 添加新功能
+
+1. **扩展主进程** (`src/main/main.js`)：
+   ```javascript
+   // 添加新的 IPC 处理器
+   ipcMain.handle('new-feature', async (event, data) => {{
+     // 实现功能
+     return {{ success: true, data: result }};
+   }});
+   ```
+
+2. **扩展预加载脚本** (`src/preload/preload.js`)：
+   ```javascript
+   // 暴露新 API 给渲染进程
+   contextBridge.exposeInMainWorld('electronAPI', {{
+     ...existingAPI,
+     newFeature: (data) => ipcRenderer.invoke('new-feature', data)
+   }});
+   ```
+
+3. **扩展渲染进程** (`src/renderer/renderer.js`)：
+   ```javascript
+   // 调用新功能
+   async function useNewFeature() {{
+     const result = await window.electronAPI.newFeature(data);
+     // 处理结果
+   }}
+   ```
+
+### 使用 NEMeetingKit SDK
+
+项目已集成 NEMeetingKit SDK，可通过以下方式访问：
+
+```javascript
+// 获取 SDK 实例
+const NEMeetingKit = (await import('nemeeting-electron-sdk')).default;
+const neMeetingKit = NEMeetingKit.getInstance();
+
+// 获取服务
+const accountService = neMeetingKit.getAccountService();
+const meetingService = neMeetingKit.getMeetingService();
+
+// 使用服务方法
+await accountService.loginByToken(userUuid, token);
+await meetingService.createMeeting(options);
+```
+
+### API 文档
+
+- [NEMeetingKit SDK 文档](https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/modules.html)
+- [Electron 文档](https://www.electronjs.org/docs)
+- [electron-store 文档](https://github.com/sindresorhus/electron-store)
+
+## 构建应用
+
+### 开发模式
+
+```bash
+npm start
+```
+
+### 打包应用
+
+```bash
+# 打包所有平台
+npm run build
+
+# 打包 macOS
+npm run pack:mac
+
+# 打包 Windows
+npm run pack:win
+
+# 打包 Linux
+npm run pack:linux
+```
+
+构建输出位于 `dist/` 目录。
+
+## 配置说明
+
+### 环境变量
+
+创建 `.env` 文件（可选）：
+
+```env
+APP_KEY=your_app_key_here
+NODE_ENV=development
+```
+
+### 存储位置
+
+应用配置存储在以下位置：
+- **macOS**: `~/Library/Application Support/{app-name}/config.json`
+- **Windows**: `%APPDATA%/{app-name}/config.json`
+- **Linux**: `~/.config/{app-name}/config.json`
+
+## 故障排除
+
+### 常见问题
+
+1. **依赖安装失败**
+   - 检查网络连接
+   - 尝试使用国内镜像：`npm config set registry https://registry.npmmirror.com`
+
+2. **SDK 初始化失败**
+   - 确认 AppKey 是否正确
+   - 检查网络是否能访问网易会议服务器
+   - 查看控制台错误信息
+
+3. **应用无法启动**
+   - 检查 Node.js 版本（需要 16+）
+   - 确认 Electron 依赖已正确安装
+
+4. **登录失败**
+   - 确认 User UUID 和 Token 是否正确
+   - 检查 Token 是否已过期
+   - 查看网络请求状态
+
+### 调试模式
+
+启动应用时添加调试标志：
+
+```bash
+npm start -- --debug
+```
+
+或在代码中设置：
+
+```javascript
+const config = {{
+  appKey: 'your_app_key',
+  debug: true  // 开启调试模式
+}};
+```
+
+## 贡献指南
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+## 许可证
+
+MIT License - 详见 LICENSE 文件
+
+## 支持
+
+如有问题，请：
+1. 查看 [API 文档](https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/modules.html)
+2. 检查控制台错误信息
+3. 提交 Issue 到项目仓库
+
+---
+
+**提示**：请勿将 AppKey、Token 等敏感信息提交到版本控制系统！

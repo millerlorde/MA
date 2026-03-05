@@ -1,5 +1,19 @@
 # Electron 会议应用 Skill
 
+## ⚠️ 最重要的规则
+
+**所有使用或扩展的 NEMeetingKit API 都必须来自官方文档！**
+
+```
+官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/
+```
+
+**禁止使用的错误 API：**
+- ❌ `NEMeetingKit.createClient()` - 不存在！
+- ❌ `NEMeetingKit.init()` - 应该用 `initialize()`
+- ❌ `NEMeetingKit.login()` - 应该用 `getAccountService().login()`
+- ❌ `NEMeetingKit.logout()` - 应该用 `getAccountService().logout()`
+
 ## 📌 所有文件汇总
 
 本 Skill 包含以下文件和目录：
@@ -8,7 +22,7 @@
 
 | 文件 | 用途 |
 |-----|------|
-| **SKILL.md** | Skill 详细文档 - 包含架构、实现、扩展指南 |
+| **SKILL.md** | Skill 详细文档 - 包含架构、实现、扩展指南、API 规范 |
 | **README.md** | 使用指南 - 教用户如何使用该 Skill |
 | **USAGE.md** | Copilot 使用指南 - 如何分发和使用该 Skill |
 | **INDEX.md** | 本文件 - 快速导航 |
@@ -22,7 +36,7 @@ templates/
 ├── .gitignore                      # Git 忽略配置
 ├── src/
 │   ├── main/
-│   │   └── main.js                # Electron 主进程
+│   │   └── main.js                # Electron 主进程（使用官方 API）
 │   ├── preload/
 │   │   └── preload.js             # 预加载脚本
 │   └── renderer/

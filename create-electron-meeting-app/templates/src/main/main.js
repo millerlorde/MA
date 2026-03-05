@@ -67,6 +67,7 @@ app.on('activate', () => {
 
 /**
  * 初始化 NEMeetingKit SDK
+ * 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEMeetingKit.html#initialize
  */
 ipcMain.handle('sdk-init', async (event, appKey) => {
   try {
@@ -74,26 +75,29 @@ ipcMain.handle('sdk-init', async (event, appKey) => {
       throw new Error('App Key 不能为空');
     }
 
-    // 动态导入 SDK
+    // 动态导入 SDK - 使用官方导出方式
     const sdk = await import('nemeeting-electron-sdk');
-    NEMeetingKit = sdk.default;
+    NEMeetingKit = sdk.NEMeetingKit;
 
-    // 初始化 SDK
-    const initResult = await NEMeetingKit.init({
-      appKey: appKey.trim()
+    // 使用官方 API: initialize(config)
+    // 配置参数类型: NEMeetingKitConfig
+    const result = await NEMeetingKit.initialize({
+      appKey: appKey.trim(),
+      enableLog: true,
+      logLevel: 1
     });
 
-    if (!initResult) {
-      throw new Error('SDK 初始化返回失败');
+    // 检查初始化结果 (返回类型: NEResult<undefined | NEMeetingCorpInfo>)
+    if (result && result.code === 0) {
+      // 保存配置
+      store.set('appKey', appKey.trim());
+      return {
+        success: true,
+        message: 'SDK 初始化成功'
+      };
+    } else {
+      throw new Error(result?.msg || 'SDK 初始化失败');
     }
-
-    // 保存配置
-    store.set('appKey', appKey.trim());
-
-    return {
-      success: true,
-      message: 'SDK 初始化成功'
-    };
   } catch (error) {
     console.error('SDK 初始化失败:', error);
     return {
@@ -105,10 +109,11 @@ ipcMain.handle('sdk-init', async (event, appKey) => {
 
 /**
  * 用户登录
+ * 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEAccountService.html#login
  */
 ipcMain.handle('sdk-login', async (event, userUuid, token) => {
   try {
-    if (!NEMeetingKit) {
+    if (!NEMeetingKit || !NEMeetingKit.isInitialized) {
       throw new Error('SDK 尚未初始化，请先初始化 SDK');
     }
 
@@ -116,27 +121,35 @@ ipcMain.handle('sdk-login', async (event, userUuid, token) => {
       throw new Error('User UUID 和 Token 不能为空');
     }
 
-    // 调用 SDK 登录方法
-    const loginResult = await NEMeetingKit.login({
-      userUuid: userUuid.trim(),
-      userToken: token.trim()
-    });
-
-    if (!loginResult) {
-      throw new Error('登录失败');
+    // 获取账户服务
+    // 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEMeetingKit.html#getAccountService
+    const accountService = NEMeetingKit.getAccountService();
+    if (!accountService) {
+      throw new Error('获取账户服务失败，SDK 可能未正确初始化');
     }
 
-    // 保存用户信息
-    store.set('userInfo', {
-      userUuid: userUuid.trim(),
-      loginTime: new Date().toISOString()
+    // 使用官方 API: accountService.login(params)
+    const loginResult = await accountService.login({
+      uid: userUuid.trim(),
+      token: token.trim()
     });
 
-    return {
-      success: true,
-      message: '登录成功',
-      userUuid: userUuid.trim()
-    };
+    // 检查登录结果 (返回类型: NEResult<void>)
+    if (loginResult && loginResult.code === 0) {
+      // 保存用户信息
+      store.set('userInfo', {
+        userUuid: userUuid.trim(),
+        loginTime: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        message: '登录成功',
+        userUuid: userUuid.trim()
+      };
+    } else {
+      throw new Error(loginResult?.msg || '登录失败');
+    }
   } catch (error) {
     console.error('登录失败:', error);
     return {
@@ -148,27 +161,35 @@ ipcMain.handle('sdk-login', async (event, userUuid, token) => {
 
 /**
  * 用户登出
+ * 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEAccountService.html#logout
  */
 ipcMain.handle('sdk-logout', async (event) => {
   try {
-    if (!NEMeetingKit) {
+    if (!NEMeetingKit || !NEMeetingKit.isInitialized) {
       throw new Error('SDK 尚未初始化');
     }
 
-    // 调用 SDK 登出方法
-    const logoutResult = await NEMeetingKit.logout();
-
-    if (!logoutResult) {
-      throw new Error('登出失败');
+    // 获取账户服务
+    const accountService = NEMeetingKit.getAccountService();
+    if (!accountService) {
+      throw new Error('获取账户服务失败');
     }
 
-    // 清除用户信息
-    store.delete('userInfo');
+    // 使用官方 API: accountService.logout()
+    const logoutResult = await accountService.logout();
 
-    return {
-      success: true,
-      message: '已登出'
-    };
+    // 检查登出结果 (返回类型: NEResult<void>)
+    if (logoutResult && logoutResult.code === 0) {
+      // 清除用户信息
+      store.delete('userInfo');
+
+      return {
+        success: true,
+        message: '已登出'
+      };
+    } else {
+      throw new Error(logoutResult?.msg || '登出失败');
+    }
   } catch (error) {
     console.error('登出失败:', error);
     return {
@@ -217,3 +238,4 @@ ipcMain.handle('clear-config', async (event) => {
   store.clear();
   return { success: true };
 });
+

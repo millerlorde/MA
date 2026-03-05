@@ -1,13 +1,30 @@
 # Copilot Skill 使用指南
 
+## ⚠️ 重要更新：API 文档规范
+
+**本 Skill 现在强制要求所有 API 调用必须来自官方文档！**
+
+### API 验证规则
+- ✅ 所有调用的方法**必须**在官方文档中存在
+- ✅ 参数和返回值**必须**按照文档实现
+- ❌ 不要使用不存在的 API（如 `createClient()`, `init()`）
+- ❌ 不要凭空猜测 API 签名
+
+如果不确定 API，应该：
+```
+向用户询问 NEMeetingKit 下对应方法的完整官方文档
+不要凭空猜测或使用文档中不存在的方法
+```
+
 ## Skill 基本信息
 
 | 项目 | 说明 |
 |-----|------|
 | **Skill 名称** | create-electron-meeting-app |
-| **功能** | 基于 NEMeetingKit SDK 创建 Electron 会议应用 |
+| **功能** | 创建基于 Electron + NEMeetingKit SDK 的会议应用 |
 | **位置** | `~/.agents/skills/create-electron-meeting-app/` |
 | **文档** | 见本目录下的 `SKILL.md` |
+| **API 文档** | https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/ |
 
 ## 文件结构
 
@@ -230,6 +247,8 @@ templates/
 
 ## 常见问题
 
+### 常见问题
+
 ### Q1: 如何更新已发布的 Skill?
 
 A: 
@@ -257,7 +276,24 @@ A:
 可以，建议：
 1. 上传到 GitHub
 2. 提供清晰的安装说明
-3. 维护更新日志（CHANGELOG.md）
+3. 在 README 中明确说明 API 文档要求
+
+### Q5: API 验证失败怎么办？
+
+A:
+如果用户要求使用官方文档中不存在的 API，应该：
+1. 要求用户提供完整的 API 文档
+2. 确认该方法确实在官方文档的 NEMeetingKit 或相关服务中
+3. 确认参数和返回值完全一致
+4. 才能在代码中使用
+
+### Q6: 如何处理用户提供的自定义 API？
+
+A:
+如果用户说"我有一个自定义 SDK 版本，有额外的方法"，应该：
+1. 要求用户提供该 SDK 版本的完整 API 文档或 TypeScript 类型定义
+2. 根据文档实现，不要凭空猜测
+3. 在注释中添加文档链接
 
 ## 技术支持
 

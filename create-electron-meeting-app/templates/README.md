@@ -2,6 +2,44 @@
 
 基于 Electron 和 NEMeetingKit SDK 的网易会议桌面客户端。
 
+## ⚠️ API 文档规范
+
+**所有 NEMeetingKit API 调用必须来自官方文档！**
+
+### 官方 API 文档
+```
+https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/
+```
+
+### 禁止使用这些不存在的 API
+
+```javascript
+// ❌ 这些都是错的！
+
+NEMeetingKit.createClient()    // 不存在！
+NEMeetingKit.init()            // 应该用 initialize()
+NEMeetingKit.login()           // 应该用 getAccountService().login()
+NEMeetingKit.logout()          // 应该用 getAccountService().logout()
+NEMeetingKit.startMeeting()    // 应该用 getMeetingService().startMeeting()
+```
+
+### 正确的 API 用法
+
+```javascript
+// ✅ 这些是对的！
+
+// 初始化 SDK
+await NEMeetingKit.initialize({ appKey })
+
+// 登录
+const accountService = NEMeetingKit.getAccountService()
+await accountService.login({ uid, token })
+
+// 启动会议
+const meetingService = NEMeetingKit.getMeetingService()
+await meetingService.startMeeting({ meetingId, displayName })
+```
+
 ## 📋 项目特性
 
 ✅ **Electron 跨平台** - Windows、macOS、Linux 支持  
@@ -10,6 +48,7 @@
 ✅ **IPC 通信** - 安全的进程间通信机制  
 ✅ **现代化 UI** - 响应式设计，美观易用  
 ✅ **可扩展** - 便于添加会议功能  
+✅ **API 规范** - 所有 API 遵循官方文档  
 
 ## 🚀 快速开始
 
@@ -100,16 +139,44 @@ MyMeetingApp/
 
 ## 💻 开发指南
 
+### ⚠️ 添加新功能前的检查清单
+
+在添加任何新功能前，必须确认：
+
+- [ ] 该方法在官方 API 文档中存在吗？
+- [ ] 文档链接是否是 https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/ 下的？
+- [ ] 参数类型和返回值与文档一致吗？
+- [ ] 是否通过正确的服务获取该方法？
+
 ### 添加新的功能
 
 #### 1. 在主进程 (main.js) 添加 IPC 处理器
 
 ```javascript
-ipcMain.handle('my-new-feature', async (event, ...params) => {
+// ❌ 错误的做法
+ipcMain.handle('my-feature', async (event, params) => {
+  const result = await NEMeetingKit.someMethod(params); // ❌ 这个方法可能不存在
+});
+
+// ✅ 正确的做法（参照官方文档实现）
+ipcMain.handle('my-feature', async (event, params) => {
   try {
-    // 实现功能逻辑
-    const result = await executeFeature(...params);
-    return { success: true, data: result };
+    // 从官方文档获取服务
+    // 文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEMeetingKit.html#getMeetingService
+    const service = NEMeetingKit.getMeetingService();
+    if (!service) {
+      return { success: false, error: 'Service not available' };
+    }
+    
+    // 调用官方文档中的方法
+    const result = await service.someMethod(params);
+    
+    // 检查返回值 (根据官方文档，返回 NEResult<T>)
+    if (result.code === 0) {
+      return { success: true, data: result.data };
+    } else {
+      return { success: false, error: result.msg };
+    }
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -120,23 +187,22 @@ ipcMain.handle('my-new-feature', async (event, ...params) => {
 
 ```javascript
 const electronAPI = {
-  // ... 现有 API ...
-  myNewFeature: (...params) => ipcRenderer.invoke('my-new-feature', ...params)
+  myFeature: (params) => ipcRenderer.invoke('my-feature', params)
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 ```
 
-#### 3. 在渲染进程 (renderer.js) 调用 API
+#### 3. 在渲染进程 (renderer.js) 调用
 
 ```javascript
-async function useMyNewFeature() {
+async function useMyFeature() {
   try {
-    const result = await window.electronAPI.myNewFeature(param1, param2);
+    const result = await window.electronAPI.myFeature(params);
     if (result.success) {
-      console.log('功能执行成功:', result.data);
+      console.log('成功:', result.data);
     } else {
-      console.error('功能失败:', result.error);
+      console.error('失败:', result.error);
     }
   } catch (error) {
     console.error('调用失败:', error);
@@ -144,25 +210,48 @@ async function useMyNewFeature() {
 }
 ```
 
-### 会议功能示例
+### 常见服务速查表
 
-基于现有框架，可以扩展会议相关功能：
+| 服务 | 获取方法 | 官方文档 |
+|-----|--------|--------|
+| 账户服务 | `NEMeetingKit.getAccountService()` | [NEAccountService](https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEAccountService.html) |
+| 会议服务 | `NEMeetingKit.getMeetingService()` | [NEMeetingService](https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEMeetingService.html) |
+| 会前服务 | `NEMeetingKit.getPreMeetingService()` | [NEPreMeetingService](https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEPreMeetingService.html) |
+| 设置服务 | `NEMeetingKit.getSettingsService()` | [NESettingsService](https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NESettingsService.html) |
+
+**查看服务文档后，再根据文档中的方法实现功能。**
+
+### 会议功能扩展示例
+
+基于现有框架，可以添加以下会议功能。
+
+**关键：所有的 API 调用都必须根据官方文档实现！**
 
 ```javascript
+// 获取会议服务
+const meetingService = NEMeetingKit.getMeetingService();
+
+if (!meetingService) {
+  console.error('会议服务不可用');
+}
+
 // 启动会议
-ipcMain.handle('start-meeting', async (event, { meetingId, displayName }) => {
-  return NEMeetingKit.startMeeting({ meetingId, displayName });
+// 查看官方文档中 NEMeetingService.startMeeting() 的签名
+const startMeetingResult = await meetingService.startMeeting({
+  meetingId: 'your-meeting-id',
+  displayName: 'Your Display Name'
 });
 
 // 加入会议
-ipcMain.handle('join-meeting', async (event, { meetingId, displayName }) => {
-  return NEMeetingKit.joinMeeting({ meetingId, displayName });
+// 查看官方文档中 NEMeetingService.joinMeeting() 的签名
+const joinMeetingResult = await meetingService.joinMeeting({
+  meetingId: 'meeting-id',
+  displayName: 'Display Name'
 });
 
 // 结束会议
-ipcMain.handle('end-meeting', async (event) => {
-  return NEMeetingKit.endMeeting();
-});
+// 查看官方文档中 NEMeetingService.endMeeting() 的签名
+const endMeetingResult = await meetingService.endMeeting();
 ```
 
 ## 🐛 调试

@@ -4,40 +4,64 @@
 
 ## ⚠️ API 文档规范
 
-**所有 NEMeetingKit API 调用必须来自官方文档！**
+**所有 NEMeetingKit API 调用必须遵循官方指南！**
 
-### 官方 API 文档
-```
-https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/
-```
+### 官方指南（必须参考）
+- SDK 初始化: https://doc.yunxin.163.com/meeting/guide/TkyMjA0MDg?platform=electron
+- 用户登录: https://doc.yunxin.163.com/meeting/guide/DUxNjQzNDA?platform=electron
+- 会议接口: https://doc.yunxin.163.com/meeting/guide/TgwNzg5Njg?platform=electron
+
+### TypeDoc（其次参考）
+- API 完整参考: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/
 
 ### 禁止使用这些不存在的 API
 
 ```javascript
 // ❌ 这些都是错的！
 
-NEMeetingKit.createClient()    // 不存在！
-NEMeetingKit.init()            // 应该用 initialize()
-NEMeetingKit.login()           // 应该用 getAccountService().login()
-NEMeetingKit.logout()          // 应该用 getAccountService().logout()
-NEMeetingKit.startMeeting()    // 应该用 getMeetingService().startMeeting()
+NEMeetingKit.createClient()          // 不存在！
+NEMeetingKit.init()                  // 应该用 initialize()
+NEMeetingKit.login()                 // 应该用 getAccountService().loginByToken()
+NEMeetingKit.logout()                // 应该用 getAccountService().logout()
+NEMeetingKit.startMeeting()          // 应该用 getMeetingService().startMeeting()
+accountService.login({ uid, token }) // 已废弃，用 loginByToken()
 ```
 
 ### 正确的 API 用法
 
 ```javascript
-// ✅ 这些是对的！
+// ✅ 官方推荐的正确用法！
 
-// 初始化 SDK
-await NEMeetingKit.initialize({ appKey })
+// 1️⃣ 第一步：获取 SDK 单例实例（必须！）
+// 官方指南: https://doc.yunxin.163.com/meeting/guide/TkyMjA0MDg?platform=electron
+const NEMeetingKitModule = await import('nemeeting-electron-sdk');
+const NEMeetingKit = NEMeetingKitModule.default;
+const neMeetingKit = NEMeetingKit.getInstance();  // ← 这一步绝对不能省！
 
-// 登录
-const accountService = NEMeetingKit.getAccountService()
-await accountService.login({ uid, token })
+// 2️⃣ 初始化 SDK
+const result = await neMeetingKit.initialize({ appKey });
+if (result && result.code === 0) {
+  console.log('初始化成功');
+}
 
-// 启动会议
-const meetingService = NEMeetingKit.getMeetingService()
-await meetingService.startMeeting({ meetingId, displayName })
+// 3️⃣ 用户登录（使用 loginByToken）
+// 官方指南: https://doc.yunxin.163.com/meeting/guide/DUxNjQzNDA?platform=electron
+const accountService = neMeetingKit.getAccountService();
+const loginResult = await accountService.loginByToken({
+  accountToken: userToken,    // 用户 Token
+  accountId: userUuid         // 用户 ID
+});
+if (loginResult && loginResult.code === 0) {
+  console.log('登录成功');
+}
+
+// 4️⃣ 启动会议
+// 官方指南: https://doc.yunxin.163.com/meeting/guide/TgwNzg5Njg?platform=electron
+const meetingService = neMeetingKit.getMeetingService();
+const meetingResult = await meetingService.startMeeting({
+  meetingId: 'xxx',
+  displayName: '用户名'
+});
 ```
 
 ## 📋 项目特性

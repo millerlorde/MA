@@ -2,17 +2,37 @@
 
 ## ⚠️ 最重要的规则
 
-**所有使用或扩展的 NEMeetingKit API 都必须来自官方文档！**
+**所有使用或扩展的 NEMeetingKit API 都必须来自官方指南！**
 
-```
-官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/
+### 官方指南（优先参考）
+- SDK 初始化: https://doc.yunxin.163.com/meeting/guide/TkyMjA0MDg?platform=electron
+- 用户登录: https://doc.yunxin.163.com/meeting/guide/DUxNjQzNDA?platform=electron
+- 会议接口: https://doc.yunxin.163.com/meeting/guide/TgwNzg5Njg?platform=electron
+
+### TypeDoc （其次参考）
+- API 完整参考: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/
+
+### 必须遵循的初始化步骤
+
+```javascript
+// ✅ 正确方式（官方推荐）
+const neMeetingKit = NEMeetingKit.getInstance();          // ← 必须第一步
+const result = await neMeetingKit.initialize(config);     // ← 然后初始化
+const accountService = neMeetingKit.getAccountService();  // ← 再获取服务
+
+// ❌ 错误方式（会导致错误）
+await NEMeetingKit.initialize(config);  // 缺少 getInstance()，会导致"无法识别initialize"
 ```
 
-**禁止使用的错误 API：**
-- ❌ `NEMeetingKit.createClient()` - 不存在！
-- ❌ `NEMeetingKit.init()` - 应该用 `initialize()`
-- ❌ `NEMeetingKit.login()` - 应该用 `getAccountService().login()`
-- ❌ `NEMeetingKit.logout()` - 应该用 `getAccountService().logout()`
+### 禁止使用的错误 API
+
+| API | 问题 | 正确替代 |
+|-----|------|---------|
+| `NEMeetingKit.createClient()` | 不存在！| 使用 `getInstance()` |
+| `NEMeetingKit.init()` | 错误的方法名 | 使用 `initialize()` |
+| `NEMeetingKit.login()` | 不存在！| 使用 `getAccountService().loginByToken()` |
+| `NEMeetingKit.logout()` | 不存在！| 使用 `getAccountService().logout()` |
+| `accountService.login({ uid, token })` | 已废弃 | 使用 `loginByToken({ accountToken, accountId })` |
 
 ## 📌 所有文件汇总
 
@@ -25,6 +45,7 @@
 | **SKILL.md** | Skill 详细文档 - 包含架构、实现、扩展指南、API 规范 |
 | **README.md** | 使用指南 - 教用户如何使用该 Skill |
 | **USAGE.md** | Copilot 使用指南 - 如何分发和使用该 Skill |
+| **CHANGELOG.md** | 版本记录 - 记录每个版本的更新 |
 | **INDEX.md** | 本文件 - 快速导航 |
 
 ### 📦 项目模板 (templates/)
@@ -36,7 +57,7 @@ templates/
 ├── .gitignore                      # Git 忽略配置
 ├── src/
 │   ├── main/
-│   │   └── main.js                # Electron 主进程（使用官方 API）
+│   │   └── main.js                # Electron 主进程（已使用正确的 getInstance() 模式）
 │   ├── preload/
 │   │   └── preload.js             # 预加载脚本
 │   └── renderer/

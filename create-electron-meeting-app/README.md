@@ -177,17 +177,34 @@ if (process.env.NODE_ENV === 'development') {
 
 ### 4. 添加会议功能
 
-示例：启动会议
+示例：启动会议（参考官方指南：https://doc.yunxin.163.com/meeting/guide/TgwNzg5Njg?platform=electron）
 
 ```javascript
 // 在 main.js 的 IPC 处理器中
 ipcMain.handle('start-meeting', async (event, meetingId, displayName) => {
   try {
-    const result = await NEMeetingKit.startMeeting({
+    const NEMeetingKitModule = await import('nemeeting-electron-sdk');
+    const NEMeetingKit = NEMeetingKitModule.default;
+    
+    // 获取 SDK 单例实例
+    const neMeetingKit = NEMeetingKit.getInstance();
+    const meetingService = neMeetingKit.getMeetingService();
+    
+    if (!meetingService) {
+      return { success: false, error: 'Meeting Service is not available' };
+    }
+    
+    // 调用启动会议 API
+    const result = await meetingService.startMeeting({
       meetingId,
       displayName
     });
-    return { success: true, data: result };
+    
+    if (result && result.code === 0) {
+      return { success: true, data: result };
+    } else {
+      return { success: false, error: result?.msg || 'Failed to start meeting' };
+    }
   } catch (error) {
     return { success: false, error: error.message };
   }

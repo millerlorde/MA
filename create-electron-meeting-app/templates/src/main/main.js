@@ -67,7 +67,16 @@ app.on('activate', () => {
 
 /**
  * 初始化 NEMeetingKit SDK
- * 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEMeetingKit.html#initialize
+ * 官方指南: https://doc.yunxin.163.com/meeting/guide/TkyMjA0MDg?platform=electron
+ * 
+ * 官方示例:
+ * import NEMeetingKit from 'nemeeting-electron-sdk';
+ * const neMeetingKit = NEMeetingKit.getInstance();
+ * neMeetingKit.initialize(config).then((res) => {
+ *   // 初始化成功
+ * }).catch((error) => {
+ *   // 初始化失败
+ * });
  */
 ipcMain.handle('sdk-init', async (event, appKey) => {
   try {
@@ -75,19 +84,21 @@ ipcMain.handle('sdk-init', async (event, appKey) => {
       throw new Error('App Key 不能为空');
     }
 
-    // 动态导入 SDK - 使用官方导出方式
+    // 动态导入 SDK
     const sdk = await import('nemeeting-electron-sdk');
-    NEMeetingKit = sdk.NEMeetingKit;
+    const NEMeetingKit = sdk.default;
 
-    // 使用官方 API: initialize(config)
-    // 配置参数类型: NEMeetingKitConfig
-    const result = await NEMeetingKit.initialize({
+    // 获取 SDK 单例实例（官方推荐方式）
+    const neMeetingKit = NEMeetingKit.getInstance();
+
+    // 初始化 SDK
+    const result = await neMeetingKit.initialize({
       appKey: appKey.trim(),
       enableLog: true,
       logLevel: 1
     });
 
-    // 检查初始化结果 (返回类型: NEResult<undefined | NEMeetingCorpInfo>)
+    // 检查初始化结果
     if (result && result.code === 0) {
       // 保存配置
       store.set('appKey', appKey.trim());
@@ -109,11 +120,17 @@ ipcMain.handle('sdk-init', async (event, appKey) => {
 
 /**
  * 用户登录
- * 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEAccountService.html#login
+ * 官方指南: https://doc.yunxin.163.com/meeting/guide/DUxNjQzNDA?platform=electron
+ * 
+ * 官方示例使用 loginByToken:
+ * accountService.loginByToken({
+ *   accountToken: token,
+ *   accountId: userId
+ * })
  */
 ipcMain.handle('sdk-login', async (event, userUuid, token) => {
   try {
-    if (!NEMeetingKit || !NEMeetingKit.isInitialized) {
+    if (!NEMeetingKit) {
       throw new Error('SDK 尚未初始化，请先初始化 SDK');
     }
 
@@ -121,20 +138,22 @@ ipcMain.handle('sdk-login', async (event, userUuid, token) => {
       throw new Error('User UUID 和 Token 不能为空');
     }
 
+    // 获取 SDK 单例实例
+    const neMeetingKit = NEMeetingKit.getInstance();
+    
     // 获取账户服务
-    // 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEMeetingKit.html#getAccountService
-    const accountService = NEMeetingKit.getAccountService();
+    const accountService = neMeetingKit.getAccountService();
     if (!accountService) {
       throw new Error('获取账户服务失败，SDK 可能未正确初始化');
     }
 
-    // 使用官方 API: accountService.login(params)
-    const loginResult = await accountService.login({
-      uid: userUuid.trim(),
-      token: token.trim()
+    // 使用官方推荐的 loginByToken 方式登录
+    const loginResult = await accountService.loginByToken({
+      accountToken: token.trim(),
+      accountId: userUuid.trim()
     });
 
-    // 检查登录结果 (返回类型: NEResult<void>)
+    // 检查登录结果
     if (loginResult && loginResult.code === 0) {
       // 保存用户信息
       store.set('userInfo', {
@@ -161,16 +180,17 @@ ipcMain.handle('sdk-login', async (event, userUuid, token) => {
 
 /**
  * 用户登出
- * 官方文档: https://doc.yunxin.163.com/meetingkit/references/web/typedoc/Latest/zh/electron/interfaces/NEAccountService.html#logout
+ * 官方指南: https://doc.yunxin.163.com/meeting/guide/DUxNjQzNDA?platform=electron
  */
 ipcMain.handle('sdk-logout', async (event) => {
   try {
-    if (!NEMeetingKit || !NEMeetingKit.isInitialized) {
+    if (!NEMeetingKit) {
       throw new Error('SDK 尚未初始化');
     }
 
-    // 获取账户服务
-    const accountService = NEMeetingKit.getAccountService();
+    // 获取 SDK 单例实例
+    const neMeetingKit = NEMeetingKit.getInstance();
+    const accountService = neMeetingKit.getAccountService();
     if (!accountService) {
       throw new Error('获取账户服务失败');
     }
@@ -178,7 +198,7 @@ ipcMain.handle('sdk-logout', async (event) => {
     // 使用官方 API: accountService.logout()
     const logoutResult = await accountService.logout();
 
-    // 检查登出结果 (返回类型: NEResult<void>)
+    // 检查登出结果
     if (logoutResult && logoutResult.code === 0) {
       // 清除用户信息
       store.delete('userInfo');

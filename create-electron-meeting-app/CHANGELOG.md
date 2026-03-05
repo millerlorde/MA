@@ -1,5 +1,67 @@
 # Skill 更新记录
 
+## v1.2.0 - 修复关键初始化 Bug & 更新官方指南引用
+
+### 🔴 重大 Bug 修复
+
+**问题**: SDK 初始化缺少必须的 `getInstance()` 步骤，导致"无法识别initialize"错误。
+
+### 关键修复
+
+1. **SDK 初始化流程修复**
+   - ❌ 旧方式: `await NEMeetingKit.initialize(config)` 
+   - ✅ 新方式: `const neMeetingKit = NEMeetingKit.getInstance(); await neMeetingKit.initialize(config);`
+   - 原因: 官方 SDK 要求必须先获取单例实例
+
+2. **登录方法更新**
+   - ❌ 旧方式: `accountService.login({ uid, token })`
+   - ✅ 新方式: `accountService.loginByToken({ accountToken, accountId })`
+   - 原因: `login()` 方法已废弃，官方推荐使用 `loginByToken()`
+
+3. **官方指南优先**
+   - 添加三个关键官方指南链接到所有代码示例
+   - SDK 初始化: https://doc.yunxin.163.com/meeting/guide/TkyMjA0MDg?platform=electron
+   - 登录认证: https://doc.yunxin.163.com/meeting/guide/DUxNjQzNDA?platform=electron
+   - 会议接口: https://doc.yunxin.163.com/meeting/guide/TgwNzg5Njg?platform=electron
+
+### 📝 文档更新
+
+**SKILL.md**
+- ✅ 更新"API 文档规范"部分，强调 getInstance() 必须步骤
+- ✅ 更新"SDK 初始化流程"显示正确的 getInstance() 步骤
+- ✅ 修复"关键实现细节"中的所有代码示例
+  - SDK 初始化: 添加 getInstance()
+  - 用户登录: 改用 loginByToken()
+  - 用户登出: 添加 getInstance()
+- ✅ 更新"常见 API 错误"的错误用法示例
+  - 显示缺少 getInstance() 的错误
+  - 显示使用 login() 而非 loginByToken() 的错误
+- ✅ 更新"API 检查清单"，添加 getInstance() 检查项
+- ✅ 更新"常见问题"，添加关于无法识别 initialize 错误的回答
+- ✅ 更新"扩展指南"的规则和代码示例
+
+**README.md**
+- ✅ 更新"添加会议功能"示例，展示正确的 getInstance() + getMeetingService() 调用
+
+**templates/src/main/main.js**
+- ✅ 初始化处理器: 使用 getInstance() 模式
+- ✅ 登录处理器: 使用 loginByToken({ accountToken, accountId })
+- ✅ 登出处理器: 使用 getInstance() 模式
+
+### ✨ 新增特性
+
+- 所有代码示例都添加了官方指南链接作为注释
+- 文档中明确强调官方指南优先于 TypeDoc
+- 添加了 getInstance() 必须性说明
+
+### 🎯 影响范围
+
+- **严重**: 所有现有项目必须 update getInstance() 初始化方式
+- **重要**: 所有登录逻辑必须改用 loginByToken()
+- **信息**: 所有后续功能扩展必须参考官方指南示例
+
+---
+
 ## v1.1.0 - API 文档规范强制实施
 
 ### 🔴 重大变更

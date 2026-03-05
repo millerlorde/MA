@@ -1,0 +1,39 @@
+{
+  "name": "my-meeting-app",
+  "version": "1.0.0",
+  "description": "Electron + NEMeetingKit application",
+  "type": "module",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack:mac": "electron-builder --mac",
+    "pack:win": "electron-builder --win",
+    "pack:linux": "electron-builder --linux"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "31.4.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "nemeeting-electron-sdk": "4.19.3",
+    "electron-store": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.example.meetingapp",
+    "productName": "MyMeetingApp",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

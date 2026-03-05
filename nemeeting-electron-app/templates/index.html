@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>MyMeetingApp</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>NEMeetingKit Electron Demo</h1>
+
+    <!-- 状态显示 -->
+    <div id="statusPanel" class="panel status-panel">
+      <div class="status-indicator">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">未初始化</span>
+      </div>
+    </div>
+
+    <!-- 配置面板 -->
+    <div id="configPanel" class="panel config-panel">
+      <h2>配置</h2>
+      <div class="form-group">
+        <label for="appKeyInput">App Key:</label>
+        <input type="text" id="appKeyInput" placeholder="请输入 App Key">
+      </div>
+      <button id="initBtn" class="btn btn-primary">初始化 SDK</button>
+    </div>
+
+    <!-- 登录面板 -->
+    <div id="loginPanel" class="panel login-panel" style="display: none;">
+      <h2>登录</h2>
+      <div class="form-group">
+        <label for="uuidInput">UUID:</label>
+        <input type="text" id="uuidInput" placeholder="请输入 UUID">
+      </div>
+      <div class="form-group">
+        <label for="tokenInput">Token:</label>
+        <input type="text" id="tokenInput" placeholder="请输入 Token">
+      </div>
+      <div class="button-group">
+        <button id="loginBtn" class="btn btn-primary">登录</button>
+      </div>
+    </div>
+
+    <!-- 主应用面板 -->
+    <div id="appPanel" class="panel app-panel" style="display: none;">
+      <h2>会议应用</h2>
+      <p>您已成功登录</p>
+      <div class="user-info">
+        <span>UUID: </span>
+        <span id="displayUuid"></span>
+      </div>
+      <button id="logoutBtn" class="btn btn-danger">登出</button>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
